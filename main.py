@@ -1,7 +1,9 @@
+import csv
 import sklearn
 import pandas
 import numpy
 import matplotlib
+from collections import Counter
 
 import tkinter as tk
 from tkinter import filedialog
@@ -11,7 +13,62 @@ def build_model():
     path = path_entry.get()
     bins = bins_entry.get()
 
-    # TODO: Add code to build the model using the provided path and bins
+    # Read the structure file
+    structure_file = path + "/Structure.txt"
+    with open(structure_file, 'r') as file:
+        structure = file.read()
+    # TODO: Process the structure and build the model
+
+    # Load train.csv file
+    train_file = path + "/train.csv"
+    instances = []
+    with open(train_file, 'r') as file:
+        reader = csv.reader(file)
+        for row in reader:
+            instances.append(row)
+
+    # Fill missing values
+    filled_instances = fill_missing_values(instances)
+
+    # TODO: Pass structure and instances to the classifier class for construction
+
+
+def fill_missing_values(instances):
+    # Check if a column is numeric or categorical
+    def is_numeric(column_values):
+        try:
+            [float(value) for value in column_values if value != '']
+            return True
+        except ValueError:
+            return False
+
+    # Calculate column averages for numeric values
+    column_averages = {}
+    for i in range(0, len(instances[0]) - 1):  # Start from index 1 to skip the class attribute
+        column_values = [row[i] for row in instances if row[i] != '']
+        if is_numeric(column_values):
+            values = [float(value) for value in column_values]
+            column_average = sum(values) / len(values)
+            column_averages[i] = column_average
+
+    # Replace missing numeric values with column averages of the same class
+    for i in range(len(instances)):
+        for j in range(0, len(instances[i]) - 1):  # Start from index 1 to skip the class attribute
+            if instances[i][j] == '':
+                class_value = instances[i][-1]  # Assuming class attribute is the last column
+                if j in column_averages:
+                    instances[i][j] = str(column_averages[j]) if class_value == 'Y' else ''
+
+    # Replace missing categorical values with the most common value
+    for i in range(len(instances)):
+        for j in range(0, len(instances[i]) - 1):  # Start from index 1 to skip the class attribute
+            if instances[i][j] == '':
+                column_values = [row[j] for row in instances if row[j] != '']
+                if not is_numeric(column_values):
+                    most_common_value = Counter(column_values).most_common(1)[0][0]
+                    instances[i][j] = most_common_value
+
+    return instances
 
 
 def classify():
