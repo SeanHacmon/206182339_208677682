@@ -30,8 +30,33 @@ def build_model():
     # Fill missing values
     filled_instances = fill_missing_values(instances)
 
+    # Discretize continuous numerical attributes using equal-width partitioning
+    discretized_instances = discretize_numeric_attributes(instances, bins)
+
     # TODO: Pass structure and instances to the classifier class for construction
 
+
+def discretize_numeric_attributes(instances, bins):
+    # Find the indices of numeric attributes
+    numeric_indices = []
+    for i, attribute in enumerate(instances[0]):
+        if attribute == "NUMERIC":
+            numeric_indices.append(i)
+
+    # Discretize numeric attributes using equal-width partitioning
+    for i in numeric_indices:
+        column_values = [float(row[i]) for row in instances[1:]]  # Exclude header row
+        min_value = min(column_values)
+        max_value = max(column_values)
+        width = (max_value - min_value) / bins
+
+        for j in range(1, len(instances)):
+            if instances[j][i] != '':
+                value = float(instances[j][i])
+                bin_index = int((value - min_value) / width) + 1
+                instances[j][i] = str(bin_index)
+
+    return instances
 
 def fill_missing_values(instances):
     # Check if a column is numeric or categorical
