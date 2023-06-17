@@ -1,29 +1,85 @@
 import csv
-import sklearn
-import pandas
-import numpy
-import matplotlib
 from collections import Counter
-
 import tkinter as tk
 from tkinter import filedialog
+from tkinter import messagebox
+import numpy as np
+
+global classifier
+
+
+class Classifier:
+    def __init__(self, X_train, y_train):
+        self.classes = None
+        self.class_prior_probabilities = None
+        self.feature_probabilities = None
+        self.X_train = X_train
+        self.y_train = y_train
+
+        self.fit(X_train, y_train)
+
+    def fit(self, X, y):
+        self.classes = np.unique(y)
+        num_classes = len(self.classes)
+        num_features = X.shape[1]
+
+        self.class_prior_probabilities = np.zeros(num_classes)
+        self.feature_probabilities = np.zeros((num_classes, num_features))
+
+        for i, c in enumerate(self.classes):
+            class_count = np.sum(y == c)
+            total_count = len(y)
+
+            # Calculate class prior probability using 3-estimator
+            self.class_prior_probabilities[i] = (class_count + 3) / (total_count + 3 * num_classes)
+
+            for feature in range(num_features):
+                feature_values = np.unique(X[:, feature])
+                num_values = len(feature_values)
+
+                feature_count = np.sum((X[:, feature] == feature_values[0]) & (y == c))
+
+                # Calculate feature probability using 3-estimator
+                self.feature_probabilities[i, feature] = (feature_count + 1) / (class_count + 3 * num_values)
+
+    def predict(self, X):
+        predictions = []
+
+        for x in X:
+            class_scores = []
+
+            for i, c in enumerate(self.classes):
+                class_score = self.class_prior_probabilities[i]
+
+                for feature, feature_value in enumerate(x):
+                    feature_values = np.unique(self.X_train[:, feature])
+                    num_values = len(feature_values)
+
+                    feature_count = np.sum((self.X_train[:, feature] == feature_value) & (self.y_train == c))
+
+                    # Calculate feature probability using 3-estimator
+                    feature_prob = (feature_count + 1) / (np.sum(self.y_train == c) + 3 * num_values)
+
+                    class_score *= feature_prob
+
+                class_scores.append(class_score)
+
+            predicted_class = self.classes[np.argmax(class_scores)]
+            predictions.append(predicted_class)
+
+        return predictions
 
 
 def build_model():
     path = path_entry.get()
     bins = bins_entry.get()
 
-    # Read the structure file
-    structure_file = path + "/Structure.txt"
-    with open(structure_file, 'r') as file:
-        structure = file.read()
-    # TODO: Process the structure and build the model
-
     # Load train.csv file
     train_file = path + "/train.csv"
     instances = []
     with open(train_file, 'r') as file:
         reader = csv.reader(file)
+        header = next(reader)  # Read the header
         for row in reader:
             instances.append(row)
 
@@ -31,9 +87,62 @@ def build_model():
     filled_instances = fill_missing_values(instances)
 
     # Discretize continuous numerical attributes using equal-width partitioning
-    discretized_instances = discretize_numeric_attributes(instances, bins)
+    discretized_instances = discretize_numeric_attributes(filled_instances, bins)
+    X_train, y_train = prepare_data(discretized_instances)
 
-    # TODO: Pass structure and instances to the classifier class for construction
+    global classifier
+    classifier = Classifier(X_train, y_train)
+
+    messagebox.showinfo("Dialog", "building classifier using train-set is done")
+
+def prepare_data(data_array):
+    feature_values = []
+    class_labels = []
+
+    for row in data_array:
+        feature_values.append(row[:-1])  # Extract feature values (except last element)
+        class_labels.append(row[-1])  # Extract class label (last element)
+
+    feature_values = np.array(feature_values)
+    class_labels = np.array(class_labels)
+
+    # Parse the structure file to obtain feature names and possible values
+    feature_names, feature_possible_values = parse_structure_file()
+
+    # Convert feature values to binary representation if needed
+    for i in range(feature_values.shape[1]):
+        possible_values = feature_possible_values[i]
+        if len(possible_values) > 2 and not np.all(np.isin(feature_values[:, i], [0, 1])):  # Convert to binary if more than 2 possible values and not already binary
+            for j, value in enumerate(possible_values):
+                binary_values = np.where(feature_values[:, i] == value, 1, 0)
+                feature_values[:, i] = binary_values
+
+    return feature_values, class_labels
+
+
+def parse_structure_file():
+    feature_names = []
+    feature_possible_values = []
+    path = path_entry.get()
+    structure_file = path + "/Structure.txt"
+
+    with open(structure_file, 'r') as file:
+        lines = file.readlines()
+
+        for line in lines:
+            line = line.strip()
+
+            if line.startswith('@ATTRIBUTE'):
+                parts = line.split(' ')
+                feature_name = parts[1]  # Extract the feature name
+
+                # Extract the possible values for the feature (inside curly braces {})
+                possible_values = parts[2][1:-1].split(',')
+
+                feature_names.append(feature_name)
+                feature_possible_values.append(possible_values)
+
+    return feature_names, feature_possible_values
 
 
 def discretize_numeric_attributes(instances, bins):
@@ -57,6 +166,7 @@ def discretize_numeric_attributes(instances, bins):
                 instances[j][i] = str(bin_index)
 
     return instances
+
 
 def fill_missing_values(instances):
     # Check if a column is numeric or categorical
@@ -97,8 +207,23 @@ def fill_missing_values(instances):
 
 
 def classify():
-    return
-    # TODO: Add code for the classification function
+    path = path_entry.get()
+    # Load test.csv file
+    test_file = path + "/test.csv"
+    instances = []
+    with open(test_file, 'r') as file:
+        reader = csv.reader(file)
+        header = next(reader)
+        for row in reader:
+            instances.append(row)
+    instances_without_labels = [instance[:-1] for instance in instances]
+    global classifier
+    predicted_labels = classifier.predict(instances_without_labels)
+
+    output_file = path + "/output.txt"
+    with open(output_file, 'w') as file:
+        for i, label in enumerate(predicted_labels):
+            file.write(f"{i+1} {label}\n")
 
 # Create the main window
 window = tk.Tk()
@@ -132,6 +257,7 @@ build_button.pack()
 
 classify_button = tk.Button(window, text="Classify", command=classify)
 classify_button.pack()
+
 
 # Start the main event loop
 window.mainloop()
