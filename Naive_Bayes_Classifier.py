@@ -1,4 +1,5 @@
 import csv
+import os
 from collections import Counter
 import tkinter as tk
 from tkinter import filedialog
@@ -69,8 +70,24 @@ class Classifier:
 
         return predictions
 
+def validate_input():
+    path = path_entry.get()
+    bins = bins_entry.get()
+
+    if not path or not os.path.exists(path):
+        messagebox.showerror("Error", "Invalid path. Please select a valid path.")
+        return False
+
+    if not bins.isdigit() or int(bins) <= 0:
+        messagebox.showerror("Error", "Invalid number of bins. Please enter a positive integer.")
+        return False
+
+    return True
 
 def build_model():
+    if not validate_input():
+        return
+
     path = path_entry.get()
     bins = bins_entry.get()
 
@@ -252,16 +269,33 @@ bins_label.pack()
 bins_entry = tk.Entry(window)
 bins_entry.pack()
 
-build_button = tk.Button(window, text="Build", command=build_model)
+build_button = tk.Button(window, text="Build", command=build_model, state="disabled")
 build_button.pack()
 
+
+
+path_entry.bind("<KeyRelease>", lambda event: enable_build_button())
+
+bins_entry.bind("<KeyRelease>", lambda event: enable_build_button())
+
+def enable_build_button():
+    path = path_entry.get()
+    bins = bins_entry.get()
+
+    if validate_input():
+        build_button.config(state="normal")
+    else:
+        build_button.config(state="disabled")
+        messagebox.showerror("Error", "Please provide a valid path and a valid number of bins.")
+
+    # Enable the "Build" button if all conditions are met
+    build_button.config(state="normal")
 classify_button = tk.Button(window, text="Classify", command=classify)
 classify_button.pack()
 
 
 # Start the main event loop
 window.mainloop()
-
 # Press the green button in the gutter to run the script.
 # if __name__ == '__main__':
 #     print_hi('PyCharm')
